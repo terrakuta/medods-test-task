@@ -160,7 +160,7 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 	}
 
 	if input.MaterializeDays < 0 {
-		return CreateInput{}, fmt.Errorf("%w: materialize_days must be >= 0", ErrInvalidInput)
+		return CreateInput{}, fmt.Errorf("%w: materialize_days must be >= 1 (or 0 to use the default of %d days)", ErrInvalidInput, defaultMaterializeDays)
 	}
 
 	return input, nil

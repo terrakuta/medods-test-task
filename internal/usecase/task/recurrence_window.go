@@ -12,7 +12,10 @@ const defaultMaterializeDays = 90
 const maxMaterializeDays = 366
 
 func materializationWindow(rule taskdomain.RecurrenceRule, materializeDays int) (from time.Time, to time.Time, err error) {
-	if materializeDays <= 0 {
+	// 0 means "use default" (field was omitted in JSON); negative values are already
+	// rejected by validateCreateInput, so this branch only fires when materialize_days
+	// is absent from the request.
+	if materializeDays == 0 {
 		materializeDays = defaultMaterializeDays
 	}
 

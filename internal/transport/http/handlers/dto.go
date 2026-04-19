@@ -73,13 +73,19 @@ func (r *taskCreateDTO) recurrenceToDomain() (*taskdomain.RecurrenceRule, error)
 
 	if rule.Type == taskdomain.RecurrenceFixedDates {
 		rule.SpecificDates = make([]time.Time, 0, len(rd.SpecificDates))
+		seen := make(map[string]bool)
 		for i := range rd.SpecificDates {
 			d, err := time.Parse("2006-01-02", rd.SpecificDates[i])
 			if err != nil {
 				return nil, fmt.Errorf("recurrence.specific_dates[%d]: %w", i, err)
 			}
 
-			rule.SpecificDates = append(rule.SpecificDates, d.UTC())
+			dUTC := d.UTC()
+			key := dUTC.Format("2006-01-02")
+			if !seen[key] {
+				seen[key] = true
+				rule.SpecificDates = append(rule.SpecificDates, dUTC)
+			}
 		}
 	}
 

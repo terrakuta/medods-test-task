@@ -117,7 +117,7 @@ func (r *Repository) MaterializeRecurrence(
 
 	const updateRule = `
 		UPDATE task_recurrence
-		SET materialized_until = $2
+		SET materialized_until = GREATEST(materialized_until, $2)
 		WHERE template_task_id = $1
 	`
 
@@ -424,10 +424,10 @@ type taskScanner interface {
 
 func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	var (
-		task            taskdomain.Task
-		status          string
-		seriesID        pgtype.Int8
-		occurrence      pgtype.Date
+		task       taskdomain.Task
+		status     string
+		seriesID   pgtype.Int8
+		occurrence pgtype.Date
 	)
 
 	if err := scanner.Scan(
@@ -460,17 +460,17 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 
 func scanTaskWithOptionalRecurrence(scanner taskScanner) (*taskdomain.Task, error) {
 	var (
-		task            taskdomain.Task
-		status          string
-		seriesID        pgtype.Int8
-		occurrence      pgtype.Date
-		recurrenceType  pgtype.Text
-		interval        pgtype.Int4
-		dayOfMonth      pgtype.Int4
-		specificDates   []string
-		parity          pgtype.Text
-		startDate       pgtype.Date
-		endDate         pgtype.Date
+		task           taskdomain.Task
+		status         string
+		seriesID       pgtype.Int8
+		occurrence     pgtype.Date
+		recurrenceType pgtype.Text
+		interval       pgtype.Int4
+		dayOfMonth     pgtype.Int4
+		specificDates  []string
+		parity         pgtype.Text
+		startDate      pgtype.Date
+		endDate        pgtype.Date
 	)
 
 	if err := scanner.Scan(

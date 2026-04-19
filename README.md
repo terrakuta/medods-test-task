@@ -77,3 +77,33 @@ http://localhost:8080/swagger/openapi.json
 - `GET /api/v1/tasks/{id}`
 - `PUT /api/v1/tasks/{id}`
 - `DELETE /api/v1/tasks/{id}`
+
+### Примеры использования (cURL)
+
+Создание ежедневной задачи (каждые 2 дня):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Ежедневный обзвон пациентов",
+    "description": "Проверить самочувствие после выписки",
+    "status": "new",
+    "recurrence": {
+      "type": "daily_interval",
+      "interval_days": 2,
+      "start_date": "2026-05-01"
+    },
+    "materialize_days": 30
+  }'
+```
+
+Генерация инстансов на будущее (материализация):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tasks/1/materialize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "until": "2026-06-01"
+  }'
+```
