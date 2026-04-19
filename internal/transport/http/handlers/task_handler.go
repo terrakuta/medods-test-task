@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -21,16 +22,24 @@ func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
 }
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req taskMutationDTO
+	var req taskCreateDTO
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
+	recurrence, err := req.recurrenceToDomain()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:            req.Title,
+		Description:      req.Description,
+		Status:           req.Status,
+		Recurrence:       recurrence,
+		MaterializeDays:  req.MaterializeDays,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -90,6 +99,33 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.usecase.Delete(r.Context(), id); err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TaskHandler) Materialize(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var req materializeDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	until, err := time.Parse("2006-01-02", req.Until)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("until must be a date in YYYY-MM-DD form"))
+		return
+	}
+
+	if err := h.usecase.MaterializeSeries(r.Context(), id, until); err != nil {
 		writeUsecaseError(w, err)
 		return
 	}

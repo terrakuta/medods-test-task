@@ -36,7 +36,27 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	model.CreatedAt = now
 	model.UpdatedAt = now
 
-	created, err := s.repo.Create(ctx, model)
+	if normalized.Recurrence == nil {
+		created, err := s.repo.Create(ctx, model)
+		if err != nil {
+			return nil, err
+		}
+
+		return created, nil
+	}
+
+	if err := normalized.Recurrence.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+
+	from, to, err := materializationWindow(*normalized.Recurrence, normalized.MaterializeDays)
+	if err != nil {
+		return nil, err
+	}
+
+	occurrences := taskdomain.EnumerateOccurrenceDates(*normalized.Recurrence, from, to)
+
+	created, err := s.repo.CreateWithRecurrence(ctx, model, *normalized.Recurrence, occurrences, to)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +110,39 @@ func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
 	return s.repo.List(ctx)
 }
 
+func (s *Service) MaterializeSeries(ctx context.Context, templateID int64, untilUTC time.Time) error {
+	if templateID <= 0 {
+		return fmt.Errorf("%w: id must be positive", ErrInvalidInput)
+	}
+
+	if untilUTC.IsZero() {
+		return fmt.Errorf("%w: until is required", ErrInvalidInput)
+	}
+
+	stored, err := s.repo.GetStoredRecurrence(ctx, templateID)
+	if err != nil {
+		return err
+	}
+
+	until := normalizeUTCDate(untilUTC)
+
+	if stored.Rule.EndDate != nil {
+		endCap := normalizeUTCDate(*stored.Rule.EndDate)
+		if until.After(endCap) {
+			until = endCap
+		}
+	}
+
+	from := normalizeUTCDate(stored.MaterializedUntil).AddDate(0, 0, 1)
+	if from.After(until) {
+		return nil
+	}
+
+	occurrences := taskdomain.EnumerateOccurrenceDates(stored.Rule, from, until)
+
+	return s.repo.MaterializeRecurrence(ctx, templateID, occurrences, until)
+}
+
 func validateCreateInput(input CreateInput) (CreateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
@@ -104,6 +157,10 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 
 	if !input.Status.Valid() {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if input.MaterializeDays < 0 {
+		return CreateInput{}, fmt.Errorf("%w: materialize_days must be >= 0", ErrInvalidInput)
 	}
 
 	return input, nil

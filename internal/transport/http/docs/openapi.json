@@ -3,7 +3,7 @@
   "info": {
     "title": "Task Service API",
     "version": "1.0.0",
-    "description": "CRUD API for tasks built with clean architecture."
+    "description": "CRUD API for tasks with optional recurrence and materialized occurrences."
   },
   "servers": [
     {
@@ -56,6 +56,34 @@
             }
           },
           "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/materialize": {
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Materialize recurring task occurrences until a date",
+        "description": "Extends generated instance tasks for a recurrence template. The `id` must be the template task returned when the series was created.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MaterializeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "Materialization applied (possibly no new rows if the window was empty)" },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -153,6 +181,64 @@
       }
     },
     "schemas": {
+      "RecurrenceRule": {
+        "type": "object",
+        "required": ["type", "start_date"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Recurrence discriminator",
+            "enum": [
+              "daily_interval",
+              "monthly_day",
+              "fixed_dates",
+              "month_day_parity"
+            ]
+          },
+          "interval_days": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "For daily_interval: every n-th day from start_date (inclusive)"
+          },
+          "day_of_month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "description": "For monthly_day: repeat on this calendar day each month (skipped in shorter months)"
+          },
+          "specific_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" },
+            "description": "For fixed_dates: explicit YYYY-MM-DD list"
+          },
+          "month_day_parity": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "description": "For month_day_parity: match even or odd day-of-month numbers"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "UTC calendar anchor / lower bound for matching"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Optional inclusive upper bound"
+          }
+        }
+      },
+      "MaterializeRequest": {
+        "type": "object",
+        "required": ["until"],
+        "properties": {
+          "until": {
+            "type": "string",
+            "format": "date",
+            "description": "UTC date inclusive — generate occurrences through this day (subject to recurrence end_date)"
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": ["title"],
@@ -169,6 +255,16 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/RecurrenceRule"
+          },
+          "materialize_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 366,
+            "default": 90,
+            "description": "On create with recurrence: how many calendar days forward from start_date (inclusive) to materialize. 0 means default 90."
           }
         }
       },
@@ -214,6 +310,20 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"
+          },
+          "series_template_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Set on generated occurrence rows; references the template task id"
+          },
+          "occurrence_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date for an occurrence row"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/RecurrenceRule",
+            "description": "Present on template tasks that define a series"
           }
         }
       },
